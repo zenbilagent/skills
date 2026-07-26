@@ -315,9 +315,14 @@ fi
    - **Compose Silme:** `/api/trpc/compose.delete` endpoint'i **`deleteVolumes` boolean parametresini zorunlu tutar**: `{"json": {"composeId": "<id>", "deleteVolumes": true}}`. `deleteVolumes` eksikse `400 BAD_REQUEST` döner.
 
 #### 7. 404 Hataları — API Endpoint Sınırlamaları ve Manuel Panel Müdahalesi (Pitfall)
-Dokploy API'sinin tüm prosedürleri (örneğin `compose.read`, `application.all`, `domain.all`) tRPC üzerinden her zaman dışarı açık olmayabilir veya sürüm farklarından dolayı `404 NOT_FOUND` dönebilir. 
+Dokploy API'sinin tüm prosedürleri (özellikle `compose.read`, `application.all`, `domain.all`) tRPC üzerinden her zaman dışarı açık olmayabilir veya sürüm farklarından dolayı `404 NOT_FOUND` dönebilir. 
 1. **API Israrından Kaçının:** Komut satırından Dokploy tRPC API ile compose veya domain okuma/yazma işlemlerinde `404 NOT_FOUND` hatası alıyorsanız, API ile zorlamak yerine kullanıcıdan beklentiye girmeden veya kullanıcıyı yönlendirerek **web paneli (`dokploy.zenbil.site`)** üzerinden manuel müdahaleyi tercih edin.
 2. **Panel Önceliği:** Compose servislerinin domain ve port eşleştirmeleri (özellikle Supabase gibi harici stack'ler) panel arayüzünde çok daha kararlı çalışır.
+
+#### 8. Supabase Client, CORS & Migrations Entegrasyonu (Pitfall)
+Next.js ve benzeri frontend projelerinde paylaşımlı Supabase (`supabase.zenbil.site`) kullanırken:
+1. **CORS:** Dokploy üzerindeki `supabase` compose servisinde Kong API Gateway'in `KONG_CORS_ORIGINS` çevre değişkenine ilgili subdomain'ler (örn: `https://*.zenbil.site`) eklenmelidir.
+2. **Otomatik Migrations:** Proje kök dizinine `supabase/migrations/` klasörü eklenerek veritabanı şeması versiyonlanmalıdır. Dockerfile içerisine Supabase CLI eklenerek (`npm install -g supabase`), container başlangıcında `npx supabase db push --db-url "$DATABASE_URL" --yes` komutu ile tabloların otomatik oluşturulması / güncellenmesi sağlanmalıdır.
 
 
 ---
