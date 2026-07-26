@@ -259,7 +259,7 @@ fi
 ---
 ## Önemli İpuçları ve Sık Karşılaşılan Durumlar (Pitfalls)
 0. **🚨 KRİTİK: Git Init — HER ZAMAN TEMİZ DİZİNDE!:**
-   `git init` komutu **ASLA** çalışma alanı kök dizininde (`/opt/data`, `~` veya `projects/`) çalıştırılmamalıdır. Bu, **binlerce gereksiz dosyayı** (node_modules, cache, veritabanları, embedded git repo'ları, session dosyaları vb.) commitleyerek devasa ve bozuk bir repo oluşturur. **BU HATA DAHA ÖNCE GERÇEKLEŞTİ ve temizlenmesi zor oldu.**
+   `git init` komutu **ASLA** çalışma alanı kök dizininde (`/opt/data`, `~` veya `projects/` kurulu olmamalıdır). Bu, **binlerce gereksiz dosyayı** (node_modules, cache, veritabanları, embedded git repo'ları, session dosyaları vb.) commitleyerek devasa ve bozuk bir repo oluşturur. **BU HATA DAHA ÖNCE GERÇEKLEŞTİ ve temizlenmesi zor oldu.**
    
    **DOĞRU SIRA (adım adım, atlanamaz):**
    1. `mkdir -p projects/<proje-adi>` — temiz proje dizinini oluştur
@@ -323,6 +323,7 @@ Dokploy API'sinin tüm prosedürleri (özellikle `compose.read`, `application.al
 Next.js ve benzeri frontend projelerinde paylaşımlı Supabase (`supabase.zenbil.site`) kullanırken:
 1. **CORS:** Dokploy üzerindeki `supabase` compose servisinde Kong API Gateway'in `KONG_CORS_ORIGINS` çevre değişkenine ilgili subdomain'ler (örn: `https://*.zenbil.site`) eklenmelidir.
 2. **Otomatik Migrations:** Proje kök dizinine `supabase/migrations/` klasörü eklenerek veritabanı şeması versiyonlanmalıdır. Dockerfile içerisine Supabase CLI eklenerek (`npm install -g supabase`), container başlangıcında `npx supabase db push --db-url "$DATABASE_URL" --yes` komutu ile tabloların otomatik oluşturulması / güncellenmesi sağlanmalıdır.
+3. **Docker Socket & Compose Env:** Supabase compose servisinde `vector` servisi gibi bileşenlerin hatasız ayağa kalkması için `DOCKER_SOCKET_LOCATION=/var/run/docker.sock` ve `JWT_EXPIRY=3600` çevre değişkenlerinin Dokploy compose env ayarlarında tanımlı olması zorunludur.
 
 
 ---
