@@ -1,18 +1,17 @@
 ---
 name: new-project-dokploy
-description: Yeni bir proje/uygulama/site oluşturur, Next.js ve Tailwind CSS ile geliştirir, Dockerize eder, GitHub'a pushlar, Dokploy API ile PostgreSQL ve *.zenbil.site üzerinde deploy eder.
+description: Yeni bir proje/uygulama/site oluşturur, Next.js ve Tailwind CSS ile geliştirir, MinIO (S3) ve PostgreSQL entegre eder, Dokploy üzerinde deploy eder.
 ---
 
-# Skill: Otomatik Next.js & Tailwind Proje Geliştirme, PostgreSQL (Prisma) ve Dokploy Deploy
+# Skill: Otomatik Next.js & Tailwind Proje Geliştirme, PostgreSQL (Prisma), MinIO (S3 Storage) ve Dokploy Deploy
 
 ## Açıklama
 Bu skill, kullanıcı yeni bir proje, web sitesi veya servis geliştirilmesini istediğinde tüm uçtan uca süreci otomatize eder:
 1. `projects/` dizininde yeni proje klasörü oluşturma, **Next.js** ve **Tailwind CSS** ile geliştirme.
-2. **(Veritabanı gerektiren uygulamalar için)** Dokploy PostgreSQL veritabanı oluşturma, Prisma ORM (Code-First) entegrasyonu ve otomatik migration.
-3. Dockerfile ve docker-compose (iç port 3000 - expose) yapılandırması.
-4. GitHub üzerinde repo oluşturup kodları pushlama.
-5. Dokploy tRPC API kullanarak projeyi oluşturma, Git reponuzu bağlama, `*.zenbil.site` subdomain'i ekleme ve deploy etme.
-6. Deployment sonrası canlılık (health check) doğrulama testi.
+2. **(Veritabanı gerekiyorsa)** Dokploy PostgreSQL veritabanı, Prisma ORM (Code-First) entegrasyonu ve otomatik migration.
+3. **(Dosya/Medya saklama gerekiyorsa)** Dokploy üzerinden **MinIO (S3 Uyumlu Object Storage)** servisi kurma ve S3 API ile dosya/resim/PDF yönetimi.
+4. Dockerfile ve docker-compose yapılandırması.
+5. GitHub üzerinde repo oluşturup kodları pushlama ve Dokploy üzerinden deploy etme.
 
 ---
 
@@ -67,75 +66,57 @@ set +a
 
 ---
 
-### Adım 2: Veritabanı ve Prisma Entegrasyonu (Koşullu)
-*Uygulama kalıcı veri saklama veya veritabanı gerektiriyorsa (CRUD, üyelik, aidat takibi vb.):*
+### Adım 2: Veritabanı, Prisma ve S3 Storage Entegrasyonu (Koşullu)
 
-1. **Prisma Kurulumu:**
+#### A. Veritabanı İhtiyacı (Prisma & PostgreSQL):
+*Uygulama kalıcı veri saklama veya CRUD gerektiriyorsa:*
+1. `npm install prisma @prisma/client` kurulur.
+2. `prisma/schema.prisma` içine `binaryTargets = ["native", "linux-musl-openssl-3.0.x"]` eklenir.
+3. Dokploy API (`postgres.create`) ile izole PostgreSQL veritabanı (`apartman_db` vb.) oluşturulur.
+4. Dockerfile içerisine `pg_isready` bekleme döngüsü ve `npx prisma db push` eklenir.
+
+#### B. Dosya/Medya Depolama İhtiyacı (MinIO S3 Object Storage):
+*Uygulama dosya, resim, PDF vb. yükleme ve saklama (Upload/Storage) gerektiriyorsa:*
+1. **Dokploy Üzerinde MinIO Servisi Kurma (Docker Compose veya Compose tRPC API):**
+   Dokploy'da MinIO servisi için `minio` adında bir Docker Compose servisi (`dpage/minio` veya `minio/minio`) ayağa kaldırılır.
+   **Örnek MinIO Compose:**
+   ```yaml
+   version: '3.8'
+   services:
+     minio:
+       image: minio/minio:latest
+       container_name: shared-minio
+       restart: always
+       command: server /data --console-address ":9001"
+       environment:
+         MINIO_ROOT_USER: minio_admin
+         MINIO_ROOT_PASSWORD: minio_secure_password_123
+       expose:
+         - "9000"
+         - "9001"
+       volumes:
+         - minio_data:/data
+       networks:
+         - dokploy-network
+   ```
+2. **S3 API Entegrasyonu (AWS SDK S3 Client):**
+   Uygulama içinde `@aws-sdk/client-s3` kütüphanesi kurularak standart **S3 API** üzerinden dosya yükleme/indirme işlemleri yapılır:
    ```bash
-   npm install prisma @prisma/client
+   npm install @aws-sdk/client-s3
    ```
-2. **Prisma Şeması (`prisma/schema.prisma`):**
-   Alpine Linux uyumluluğu için `binaryTargets` **mutlaka** eklenmelidir:
-   ```prisma
-   datasource db {
-     provider = "postgresql"
-     url      = env("DATABASE_URL")
-   }
+   **Bağlantı Ayarları (`lib/s3.ts`):**
+   ```typescript
+   import { S3Client } from '@aws-sdk/client-s3'
 
-   generator client {
-     provider      = "prisma-client-js"
-     binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
-   }
-   ```
-3. **Dokploy Üzerinde Özel PostgreSQL Veritabanı Oluşturma (tRPC API):**
-   ```bash
-   curl -s -X POST "${DOKPLOY_URL}/api/trpc/postgres.create" \
-     -H "x-api-key: ${DOKPLOY_API_KEY}" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "json": {
-         "name": "<proje-adi>-db",
-         "projectId": "'"${DOKPLOY_PROJECT_ID}"'",
-         "environmentId": "<environment-id>",
-         "databaseName": "<proje_db>",
-         "databaseUser": "<proje_admin>",
-         "databasePassword": "<secure_password>",
-         "dockerImage": "postgres:18"
-       }
-     }'
-   ```
-   *(Dönen yanıttan `postgresId` alınarak `postgres.deploy` ile veritabanı servisi başlatılır).*
-
-4. **Dockerfile & Otomatik Migration (pg_isready & db push):**
-   Multi-stage Dockerfile hem `builder` hem `runner` aşamasında `openssl` ve `libc6-compat` barındırmalıdır. Container başlarken veritabanının hazır olmasını bekleyen döngü (`pg_isready`) ve `npx prisma db push` eklenmelidir:
-   ```dockerfile
-   FROM node:20-alpine AS builder
-   WORKDIR /app
-   RUN apk add --no-cache openssl libc6-compat
-   COPY package*.json ./
-   RUN npm install
-   COPY . .
-   ENV DATABASE_URL="postgresql://dummy:***@localhost:5432/dummy"
-   RUN npx prisma generate
-   RUN npm run build
-
-   FROM node:20-alpine AS runner
-   WORKDIR /app
-   ENV NODE_ENV=production
-   RUN apk add --no-cache openssl libc6-compat postgresql-client
-
-   COPY --from=builder /app/public ./public
-   COPY --from=builder /app/.next/standalone ./
-   COPY --from=builder /app/.next/static ./.next/static
-   COPY --from=builder /app/prisma ./prisma
-   COPY --from=builder /app/node_modules ./node_modules
-   COPY --from=builder /app/package.json ./package.json
-
-   EXPOSE 3000
-   ENV PORT=3000
-   ENV HOSTNAME="0.0.0.0"
-
-   CMD ["sh", "-c", "echo \"DATABASE_URL=postgresql://<user>:<password>@<postgres-container-host>:5432/<db_name>\" > /app/.env; until pg_isready -h <postgres-container-host> -p 5432; do sleep 2; done; npx prisma db push --accept-data-loss || true; node server.js"]
+   export const s3Client = new S3Client({
+     region: 'us-east-1',
+     endpoint: process.env.MINIO_ENDPOINT || 'http://minio:9000', // İç ağ veya harici URL
+     credentials: {
+       accessKeyId: process.env.MINIO_ACCESS_KEY || 'minio_admin',
+       secretAccessKey: process.env.MINIO_SECRET_KEY || 'minio_secure_password_123'
+     },
+     forcePathStyle: true // MinIO için zorunludur
+   })
    ```
 
 ---
@@ -146,20 +127,17 @@ set +a
    cd projects/<proje-adi>
    git init
    git add .
-   git commit -m "feat: initial Next.js and Tailwind project setup"
+   git commit -m "feat: initial Next.js project setup with prisma and minio s3"
    ```
 
-2. GitHub API kullanarak uzaktan repo oluştur:
+2. GitHub API ile repo oluştur ve pushla:
    ```bash
    curl -X POST \
      -H "Authorization: token ${GITHUB_TOKEN}" \
      -H "Accept: application/vnd.github.v3+json" \
      https://api.github.com/user/repos \
      -d '{"name":"<proje-adi>", "private": false}'
-   ```
 
-3. Repoyu bağla ve `main` dalına pushla:
-   ```bash
    git remote add origin https://${GITHUB_TOKEN}@github.com/${GITHUB_USERNAME}/<proje-adi>.git
    git branch -M main
    git push -u origin main
@@ -172,11 +150,7 @@ Dokploy üzerinden projeyi bağla, `*.zenbil.site` domain'ini tanımla ve deploy
 
 ---
 ## Önemli İpuçları ve Sık Karşılaşılan Durumlar (Pitfalls)
-0. **🚨 KRİTİK: Git Init — HER ZAMAN TEMİZ DİZİNDE!:**
-   `git init` komutu **ASLA** çalışma alanı kök dizininde kurulu olmamalıdır.
-1. **Next.js & Tailwind CSS Zorunluluğu:**
-   Tüm yeni web uygulamaları ve arayüzler istisnasız **Next.js** ve **Tailwind CSS** kullanılarak geliştirilmelidir.
-2. **Prisma Alpine OpenSSL Hatası (`libssl.so.1.1`):**
-   Alpine imajlarında Prisma query engine `openssl` ve `libc6-compat` paketlerine ihtiyaç duyar. Hem builder hem runner aşamasında `apk add --no-cache openssl libc6-compat` kurulmalıdır.
-3. **Database Race Condition (`pg_isready`):**
-   Veritabanı gerektiren projelerde container başladığında `until pg_isready ...; do sleep 2; done` döngüsü kullanılmalıdır.
+0. **🚨 KRİTİK: Git Init — HER ZAMAN TEMİZ DIZINDE!**
+1. **Next.js & Tailwind CSS Zorunluluğu:** Tüm yeni web arayüzleri **Next.js** ve **Tailwind CSS** ile geliştirilmelidir.
+2. **MinIO `forcePathStyle: true` Ayarı:** S3 Client yapılandırılırken MinIO ile uyumlu çalışması için `forcePathStyle: true` parametresi **mutlaka** verilmelidir.
+3. **Prisma Alpine OpenSSL & pg_isready:** Veritabanı gerektiren projelerde Alpine OpenSSL paketleri ve başlangıç bekleme döngüsü unutulmamalıdır.
