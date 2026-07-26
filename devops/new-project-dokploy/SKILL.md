@@ -11,8 +11,8 @@ Bu skill, kullanıcı yeni bir proje, web sitesi veya servis geliştirilmesini i
 2. **(Veritabanı gerekiyorsa)** Dokploy PostgreSQL veritabanı, Prisma ORM (Code-First) entegrasyonu ve otomatik migration.
 3. **(Dosya/Medya saklama gerekiyorsa)** MinIO (S3 Uyumlu Object Storage) servisi ve AWS S3 SDK entegrasyonu.
 4. **Sonradan İhtiyaç Güncellemeleri:** Mevcut bir projeye sonradan veritabanı veya MinIO storage ekleneceği zaman servislerin ayrıca kurulup repoda güncellenmesi.
-5. **Merkezi Konfigürasyon:** Tüm servis bağlantı bilgileri `docker-compose.yml` ortam değişkenleri ve `.env` üzerinden merkezi olarak yönetilir.
-6. Dockerfile, GitHub push ve Dokploy deploy adımları.
+5. **Kesintisiz Push & Deploy Kuralı:** Kod tabanında veya konfigürasyonda herhangi bir değişiklik yapıldığında (hata düzeltmesi, yeni özellik, env güncellemesi vb.) değişiklikler mutlaka **Git ile commit edilip GitHub'a pushlanmalı** ve ardından Dokploy üzerinden **redeploy (deploy çıkma)** tetiklenmelidir.
+6. **Merkezi Konfigürasyon:** Tüm servis bağlantı bilgileri `docker-compose.yml` ortam değişkenleri ve `.env` üzerinden merkezi olarak yönetilir.
 
 ---
 
@@ -41,7 +41,7 @@ set +a
 
 ---
 
-### Adım 2: Veritabanı, Prisma ve S3 Storage Entegrasyonu (Koşullu & Merkezi Konfigürasyon)
+### Adım 2: Veritabanı ve Storage Entegrasyonu (Koşullu & Merkezi Konfigürasyon)
 
 #### A. Merkezi Konfigürasyon Prensibi:
 Uygulamanın kullandığı tüm veritabanı ve S3 storage bağlantı bilgileri kod içerisine hardcode edilmez. `docker-compose.yml` içerisindeki `environment:` bloğu ve `.env` üzerinden merkezi olarak yönetilir.
@@ -75,15 +75,25 @@ Mevcut ve çalışan bir projeye sonradan veritabanı veya MinIO storage ihtiyac
 1. Dokploy üzerinden ilgili API (`postgres.create` veya MinIO compose) ile yeni servis ayağa kaldırılır.
 2. Proje kodlarında gerekli paketler (`prisma`, `@aws-sdk/client-s3`) eklenir.
 3. `docker-compose.yml` ve `.env` / Dockerfile güncellenerek bağlantı bilgileri merkeze eklenir.
-4. Kodlar GitHub'a pushlanır ve Dokploy üzerinden yeniden deploy edilir (`application.deploy` veya `compose.deploy`).
+4. Kodlar GitHub'a pushlanır ve Dokploy üzerinden yeniden deploy edilir.
 
 ---
 
-### Adım 4: Git Deposu, GitHub Push ve Dokploy Deploy
-Kodlar commit edilir, GitHub'a pushlanır ve Dokploy üzerinden otomatik veya manuel deploy edilir.
+### Adım 4: Git Deposu, GitHub Push ve Deploy Çıkma (Kritik)
+1. Kod veya konfigürasyon üzerinde her değişiklik yapıldığında:
+   ```bash
+   git add .
+   git commit -m "fix/feat: açıklama"
+   git push origin main
+   ```
+2. Değişikliklerin canlıya (`*.zenbil.site`) yansıması için mutlaka Dokploy tRPC API üzerinden deploy tetiklenmelidir:
+   ```bash
+   # Application / Compose deploy tetikleme
+   ```
 
 ---
 ## Önemli İpuçları ve Sık Karşılaşılan Durumlar (Pitfalls)
-1. **Merkezi Konfigürasyon (Env):** Hiçbir şifre veya key koda gömülmez; `docker-compose.yml` `environment` bloğu ve `.env` üzerinden okunur.
-2. **Next.js & Tailwind CSS Zorunluluğu:** Tüm arayüzler Next.js + Tailwind ile tasarlanmalıdır.
-3. **Sonradan Yükseltme (Upgrade):** Sonradan eklenen veritabanı/storage ihtiyaçlarında servis önce Dokploy'da ayağa kaldırılır, ardından kod tabanı güncellenip redeploy edilir.
+1. **🚀 Her Değişiklikte Push ve Deploy:** Kodda yapılan hiçbir değişiklik lokalde bırakılmaz; mutlaka GitHub'a pushlanıp Dokploy üzerinden redeploy çıkılır.
+2. **Merkezi Konfigürasyon (Env):** Hiçbir şifre veya key koda gömülmez; `docker-compose.yml` `environment` bloğu ve `.env` üzerinden okunur.
+3. **Next.js & Tailwind CSS Zorunluluğu:** Tüm arayüzler Next.js + Tailwind ile tasarlanmalıdır.
+4. **Prisma Alpine OpenSSL & pg_isready:** Veritabanı gerektiren projelerde Alpine OpenSSL paketleri ve başlangıç bekleme döngüsü şarttır.
