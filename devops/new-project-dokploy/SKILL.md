@@ -32,23 +32,7 @@ source "$HOME/.config/hermes/supabase.env"
 set +a
 ```
 
-### Paylaşımlı Supabase Backend Entegrasyonu (Shared Supabase Backend)
-
-Geliştirilen projelerde **veritabanı, kullanıcı kimlik doğrulaması (Auth), veri depolama (Storage) veya REST API (Backend)** ihtiyacı olduğunda, her proje için ayrı bir veritabanı kurmak yerine Dokploy üzerindeki `shared-project` projesinde çalışan ortak **Supabase** servisi kullanılmalıdır.
-
-#### Supabase Erişim Bilgileri (`~/.config/hermes/supabase.env`):
-Projelerde ihtiyaç duyulduğunda aşağıdaki ortam değişkenleri uygulama `environment` / `.env` dosyasına aktarılmalıdır:
-```env
-SUPABASE_URL="https://supabase.zenbil.site"
-SUPABASE_ANON_KEY="..."         # İstemci / Client tarafı anonim anahtarı
-SUPABASE_SERVICE_ROLE_KEY="..." # Sunucu / Server tarafı yetkili anahtarı
-DATABASE_URL="postgresql://postgres:...@supabase.zenbil.site:5432/postgres" # Doğrudan PostgreSQL erişimi
-```
-
-#### Kurallar:
-1. **Ortak Kullanım:** Backend/DB gereksinimi olan tüm yeni projeler aynı Supabase instance'ını kullanmalıdır.
-2. **Kalıcılık (Data Persistence):** Dokploy üzerinde Supabase veritabanı verilerinin silinmemesi için kalıcı volume (`supabase_db_data`) yapılandırması kullanılır.
-3. **Tablo/Şema Yönetimi:** Her proje kendi tablolarını ana veritabanında (veya projeye özel PostgreSQL şemasında) oluşturabilir veya Supabase JS Client (`@supabase/supabase-js`) ile erişebilir.
+*(Kaldırıldı)*
 
 ### Beklenen Değişkenler:
 
@@ -300,8 +284,6 @@ fi
    Dokploy `sourceType: "git"` kullanırken private repolarda klonlama aşamasında yetkilendirme hatası (`status: "error"`, loglarda `fatal: could not read Username for 'https://github.com'`) alınabilir. Hata detayları `deployment.readLogs` tRPC API çağrısı ile kontrol edilebilir. GitHub App entegrasyonu kurulana kadar repoları public (`"private": false`) oluşturmak veya mevcut reponun görünürlüğünü GitHub API `PATCH /repos/{username}/{repo}` endpoint'i ile public hale getirmek deployment'ın sorunsuz çalışmasını sağlar.
 3. **Dokploy Compose & Traefik Ağı (dokploy-network):**
    Dokploy üzerinde Compose servislerinin (`composeType: "docker-compose"`) Traefik üzerinden domain (`*.zenbil.site`) alabilmesi için `docker-compose.yml` içerisinde `dokploy-network` harici ağının (`external: true`) tanımlı olması ve ilgili servislerin bu ağa bağlı olması gereklidir. Ayrıca `container_name` override edilmemeli, varsayılan Docker Compose servis adları kullanılmalıdır.
-4. **Supabase Img Tag'leri:**
-   Supabase veya benzeri Compose stack'lerinde `latest` veya eski commit etiketleri yerine doğrulanmış güncel Docker Hub etiketleri (`supabase/postgres:15.14.1.156`, `supabase/gotrue:v2.193.1`, `postgrest/postgrest:v12.0.1`, `supabase/studio:2026.07.20-sha-74a0848`, `supabase/postgres-meta:v0.96.6`) kullanılmalıdır.
 5. **Mevcut Projeyi Güncelleme / Redeploy:**
    Geliştirilen mevcut bir projede kod güncellemesi veya re-deploy yapıldığında, `application.deploy` öncesinde `application.update` API çağrısını (`sourceType: "git"`, `customGitUrl`, `customGitBranch: "main"`, `buildType: "dockerfile"`, `dockerfile: "Dockerfile"`, `buildPath: "/"`) tekrar çalıştırmak Git yapılandırmasının güncelliğinden emin olunmasını sağlar.
 2. **Dokploy Deployment Durumu Takibi:**
@@ -317,13 +299,8 @@ fi
 #### 7. 404 Hataları — API Endpoint Sınırlamaları ve Manuel Panel Müdahalesi (Pitfall)
 Dokploy API'sinin tüm prosedürleri (özellikle `compose.read`, `application.all`, `domain.all`) tRPC üzerinden her zaman dışarı açık olmayabilir veya sürüm farklarından dolayı `404 NOT_FOUND` dönebilir. 
 1. **API Israrından Kaçının:** Komut satırından Dokploy tRPC API ile compose veya domain okuma/yazma işlemlerinde `404 NOT_FOUND` hatası alıyorsanız, API ile zorlamak yerine kullanıcıdan beklentiye girmeden veya kullanıcıyı yönlendirerek **web paneli (`dokploy.zenbil.site`)** üzerinden manuel müdahaleyi tercih edin.
-2. **Panel Önceliği:** Compose servislerinin domain ve port eşleştirmeleri (özellikle Supabase gibi harici stack'ler) panel arayüzünde çok daha kararlı çalışır.
 
-#### 8. Supabase Client, CORS & Migrations Entegrasyonu (Pitfall)
-Next.js ve benzeri frontend projelerinde paylaşımlı Supabase (`supabase.zenbil.site`) kullanırken:
 1. **CORS:** Dokploy üzerindeki `supabase` compose servisinde Kong API Gateway'in `KONG_CORS_ORIGINS` çevre değişkenine ilgili subdomain'ler (örn: `https://*.zenbil.site`) eklenmelidir.
-2. **Otomatik Migrations:** Proje kök dizinine `supabase/migrations/` klasörü eklenerek veritabanı şeması versiyonlanmalıdır. Dockerfile içerisine Supabase CLI eklenerek (`npm install -g supabase`), container başlangıcında `npx supabase db push --db-url "$DATABASE_URL" --yes` komutu ile tabloların otomatik oluşturulması / güncellenmesi sağlanmalıdır.
-3. **Docker Socket & Compose Env:** Supabase compose servisinde `vector` servisi gibi bileşenlerin hatasız ayağa kalkması için `DOCKER_SOCKET_LOCATION=/var/run/docker.sock` ve `JWT_EXPIRY=3600` çevre değişkenlerinin Dokploy compose env ayarlarında tanımlı olması zorunludur.
 
 
 ---
