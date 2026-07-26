@@ -1,13 +1,13 @@
 ---
 name: new-project-dokploy
-description: Yeni bir proje/uygulama/site oluşturur, Dockerize eder, GitHub'a pushlar, Dokploy API ile PostgreSQL ve *.zenbil.site üzerinde deploy eder ve canlılık testini yapar.
+description: Yeni bir proje/uygulama/site oluşturur, Next.js ve Tailwind CSS ile geliştirir, Dockerize eder, GitHub'a pushlar, Dokploy API ile PostgreSQL ve *.zenbil.site üzerinde deploy eder.
 ---
 
-# Skill: Otomatik Proje Geliştirme, PostgreSQL (Prisma) ve Dokploy Deploy
+# Skill: Otomatik Next.js & Tailwind Proje Geliştirme, PostgreSQL (Prisma) ve Dokploy Deploy
 
 ## Açıklama
 Bu skill, kullanıcı yeni bir proje, web sitesi veya servis geliştirilmesini istediğinde tüm uçtan uca süreci otomatize eder:
-1. `projects/` dizininde yeni proje klasörü oluşturma ve geliştirme.
+1. `projects/` dizininde yeni proje klasörü oluşturma, **Next.js** ve **Tailwind CSS** ile geliştirme.
 2. Prisma ORM (Code-First) ve PostgreSQL veritabanı entegrasyonu.
 3. Dockerfile ve docker-compose (iç port 3000 - expose) yapılandırması.
 4. GitHub üzerinde repo oluşturup kodları pushlama.
@@ -36,13 +36,13 @@ set +a
 **`~/.config/hermes/dokploy.env` İçeriği:**
 ```env
 DOKPLOY_URL="xxxx"          # Örn: https://zenbil.site
-DOKPLOY_API_KEY="xxxx"      # Dokploy API anahtarı
+DOKPLOY_API_KEY=***      # Dokploy API anahtarı
 DOKPLOY_PROJECT_ID="xxxx"   # Servislerin ekleneceği Dokploy Proje ID'si
 ```
 
 **`~/.config/hermes/github.env` İçeriği:**
 ```env
-GITHUB_TOKEN="xxxx"         # GitHub Personal Access Token (repo oluşturma/push izni)
+GITHUB_TOKEN=***         # GitHub Personal Access Token (repo oluşturma/push izni)
 GITHUB_USERNAME="xxxx"      # GitHub kullanıcı adı veya organizasyon adı
 ```
 
@@ -61,10 +61,11 @@ set +a
 
 ---
 
-### Adım 1: Proje Başlatma, Prisma ve Veritabanı Yapılandırması
+### Adım 1: Proje Başlatma (Next.js & Tailwind CSS), Prisma ve Veritabanı
 1. Proje dizininde `projects/` altında projeye özel bir klasör aç: `projects/<proje-adi>`
-2. Uygulama için Prisma ve PostgreSQL (`@prisma/client`, `prisma`) kur.
-3. `prisma/schema.prisma` dosyasını oluştur. Alpine Linux uyumluluğu için **mutlaka** `binaryTargets` ekle:
+2. **Teknoloji Yığını:** Tüm web uygulamaları mutlaka **Next.js (App Router)** ile başlatılmalı ve **Tailwind CSS** ile tasarlanmalıdır.
+3. Uygulama için Prisma ve PostgreSQL (`@prisma/client`, `prisma`) kur.
+4. `prisma/schema.prisma` dosyasını oluştur. Alpine Linux uyumluluğu için **mutlaka** `binaryTargets` ekle:
    ```prisma
    datasource db {
      provider = "postgresql"
@@ -76,7 +77,7 @@ set +a
      binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
    }
    ```
-4. **Dokploy Üzerinde Özel PostgreSQL Veritabanı Oluşturma (tRPC API):**
+5. **Dokploy Üzerinde Özel PostgreSQL Veritabanı Oluşturma (tRPC API):**
    Her yeni proje için bağımsız bir PostgreSQL veritabanı oluşturmak önerilir:
    ```bash
    curl -s -X POST "${DOKPLOY_URL}/api/trpc/postgres.create" \
@@ -96,7 +97,7 @@ set +a
    ```
    Oluşturulan PostgreSQL servisini deploy etmeyi unutma (`postgres.deploy`).
 
-5. **Dockerfile Yapılandırması (Alpine OpenSSL & pg_isready Wait Loop):**
+6. **Dockerfile Yapılandırması (Alpine OpenSSL & pg_isready Wait Loop):**
    Multi-stage Dockerfile içerisinde **hem builder hem runner** aşamalarında `openssl` ve `libc6-compat` bulunmalıdır. Ayrıca container açılırken veritabanının hazır olmasını bekleyen `pg_isready` döngüsü ve `npx prisma db push` entegre edilmelidir:
    ```dockerfile
    FROM node:20-alpine AS builder
@@ -136,7 +137,7 @@ set +a
    cd projects/<proje-adi>
    git init
    git add .
-   git commit -m "feat: initial project setup with prisma and postgresql"
+   git commit -m "feat: initial Next.js and Tailwind project setup with prisma"
    ```
 
 2. GitHub API kullanarak uzaktan repo oluştur:
@@ -165,7 +166,9 @@ Dokploy üzerinden projeyi bağla, `*.zenbil.site` domain'ini tanımla ve deploy
 0. **🚨 KRİTİK: Git Init — HER ZAMAN TEMİZ DİZİNDE!:**
    `git init` komutu **ASLA** çalışma alanı kök dizininde (`/opt/data`, `~` veya `projects/` kurulu olmamalıdır). 
 
-1. **Prisma Alpine OpenSSL Hatası (`libssl.so.1.1`):**
+1. **Next.js & Tailwind CSS Zorunluluğu:**
+   Tüm yeni web uygulamaları ve arayüzler istisnasız **Next.js** ve **Tailwind CSS** kullanılarak geliştirilmelidir.
+2. **Prisma Alpine OpenSSL Hatası (`libssl.so.1.1`):**
    Alpine imajlarında Prisma query engine `openssl` ve `libc6-compat` paketlerine ihtiyaç duyar. Hem builder hem runner aşamasında `apk add --no-cache openssl libc6-compat` kurulmalıdır. Ayrıca `schema.prisma` içine `binaryTargets = ["native", "linux-musl-openssl-3.0.x"]` eklenmelidir.
-2. **Database Race Condition (`pg_isready`):**
+3. **Database Race Condition (`pg_isready`):**
    Uygulama container'ı başladığında PostgreSQL container'ının tamamen hazır olması zaman alabilir. Entrypoint içinde `until pg_isready ...; do sleep 2; done` döngüsü kullanılması zorunludur.
