@@ -10,8 +10,9 @@ Bu skill, kullanıcı yeni bir proje, web sitesi veya servis geliştirilmesini i
 1. `projects/` dizininde yeni proje klasörü oluşturma, **Next.js** ve **Tailwind CSS** ile geliştirme.
 2. **(Veritabanı gerekiyorsa)** Dokploy PostgreSQL veritabanı, Prisma ORM (Code-First) entegrasyonu ve otomatik migration.
 3. **(Dosya/Medya saklama gerekiyorsa)** MinIO (S3 Uyumlu Object Storage) servisi ve AWS S3 SDK entegrasyonu.
-4. **Merkezi Konfigürasyon:** Tüm servis bağlantı bilgileri (Database URL, MinIO credentials, vb.) parça parça kod içine serpiştirilmez; `.env` dosyası ve `docker-compose.yml` ortam değişkenleri (`environment:`) üzerinden merkezi olarak yönetilir.
-5. Dockerfile, GitHub push ve Dokploy deploy adımları.
+4. **Sonradan İhtiyaç Güncellemeleri:** Mevcut bir projeye sonradan veritabanı veya MinIO storage ekleneceği zaman servislerin ayrıca kurulup repoda güncellenmesi.
+5. **Merkezi Konfigürasyon:** Tüm servis bağlantı bilgileri `docker-compose.yml` ortam değişkenleri ve `.env` üzerinden merkezi olarak yönetilir.
+6. Dockerfile, GitHub push ve Dokploy deploy adımları.
 
 ---
 
@@ -40,7 +41,7 @@ set +a
 
 ---
 
-### Adım 2: Veritabanı ve Storage Entegrasyonu (Koşullu & Merkezi Konfigürasyon)
+### Adım 2: Veritabanı, Prisma ve S3 Storage Entegrasyonu (Koşullu & Merkezi Konfigürasyon)
 
 #### A. Merkezi Konfigürasyon Prensibi:
 Uygulamanın kullandığı tüm veritabanı ve S3 storage bağlantı bilgileri kod içerisine hardcode edilmez. `docker-compose.yml` içerisindeki `environment:` bloğu ve `.env` üzerinden merkezi olarak yönetilir.
@@ -66,15 +67,23 @@ Uygulamanın kullandığı tüm veritabanı ve S3 storage bağlantı bilgileri k
      forcePathStyle: true
    })
    ```
-   Tüm anahtar ve endpoint değerleri environment variable üzerinden okunur.
 
 ---
 
-### Adım 3: Git Deposu, GitHub Push ve Dokploy Deploy
+### Adım 3: Sonradan Veritabanı veya MinIO Eklenmesi (Existing Project Upgrade)
+Mevcut ve çalışan bir projeye sonradan veritabanı veya MinIO storage ihtiyacı doğarsa:
+1. Dokploy üzerinden ilgili API (`postgres.create` veya MinIO compose) ile yeni servis ayağa kaldırılır.
+2. Proje kodlarında gerekli paketler (`prisma`, `@aws-sdk/client-s3`) eklenir.
+3. `docker-compose.yml` ve `.env` / Dockerfile güncellenerek bağlantı bilgileri merkeze eklenir.
+4. Kodlar GitHub'a pushlanır ve Dokploy üzerinden yeniden deploy edilir (`application.deploy` veya `compose.deploy`).
+
+---
+
+### Adım 4: Git Deposu, GitHub Push ve Dokploy Deploy
 Kodlar commit edilir, GitHub'a pushlanır ve Dokploy üzerinden otomatik veya manuel deploy edilir.
 
 ---
 ## Önemli İpuçları ve Sık Karşılaşılan Durumlar (Pitfalls)
-1. **Merkezi Konfigürasyon (Env):** Hiçbir veritabanı şifresi veya S3 key koda gömülmez; her zaman `docker-compose.yml` `environment` bloğu ve `.env` dosyası üzerinden okunur.
+1. **Merkezi Konfigürasyon (Env):** Hiçbir şifre veya key koda gömülmez; `docker-compose.yml` `environment` bloğu ve `.env` üzerinden okunur.
 2. **Next.js & Tailwind CSS Zorunluluğu:** Tüm arayüzler Next.js + Tailwind ile tasarlanmalıdır.
-3. **Prisma Alpine OpenSSL & pg_isready:** Alpine container içinde Prisma ve PostgreSQL kullanırken `openssl`, `libc6-compat` ve `pg_isready` bekleme döngüsü şarttır.
+3. **Sonradan Yükseltme (Upgrade):** Sonradan eklenen veritabanı/storage ihtiyaçlarında servis önce Dokploy'da ayağa kaldırılır, ardından kod tabanı güncellenip redeploy edilir.
